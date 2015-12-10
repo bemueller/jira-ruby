@@ -35,6 +35,8 @@ module JIRA
 
       has_many :worklogs, :nested_under => ['fields','worklog']
 
+      has_many :watchers, :nested_under => 'fields', :attribute_key => 'watches'
+
       def self.all(client)
         url = client.options[:rest_base_path] + "/search?expand=transitions.fields"
         response = client.get(url)

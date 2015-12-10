@@ -251,8 +251,8 @@ module JIRA
       self_class_basename = self.name.split('::').last.downcase.to_sym
       define_method(collection) do
         child_class_options = {self_class_basename => self}
-        attribute = maybe_nested_attribute(attribute_key, options[:nested_under]) || []
-        collection = attribute.map do |child_attributes|
+        attributes = maybe_nested_attribute(attribute_key, options[:nested_under]) || []
+        collection = attributes.map do |child_attributes|
           child_class.new(client, child_class_options.merge(:attrs => child_attributes))
         end
         HasManyProxy.new(self, child_class, collection)
@@ -466,22 +466,28 @@ module JIRA
     #   maybe_nested_attribute('foo', ['bar', 'baz']) # => @attrs['bar']['baz']['foo']
     #
     def maybe_nested_attribute(attribute_name, nested_under = nil)
-      self.class.maybe_nested_attribute(@attrs, attribute_name, nested_under)
+      self.class.maybe_nested_attribute(@client, @attrs, attribute_name, nested_under)
     end
 
-    def self.maybe_nested_attribute(attributes, attribute_name, nested_under = nil)
+    def self.maybe_nested_attribute(client, attributes, attribute_name, nested_under = nil)
       return attributes[attribute_name] if nested_under.nil?
-      if nested_under.instance_of? Array
-        final = nested_under.inject(attributes) do |parent, key|
-          break if parent.nil?
-          parent[key]
-        end
-        return nil if final.nil?
-        final[attribute_name]
+
+      nested_under = Array[nested_under] unless nested_under.instance_of? Array
+
+      final = nested_under.inject(attributes) do |parent, key|
+        break if parent.nil?
+        parent[key]
+      end
+
+      return nil if final.nil?
+
+      if final.instance_of?(Hash) && final.has_key?('self')
+        parse_json(client.get(final['self']).body)[attribute_name]
       else
-        return attributes[nested_under][attribute_name]
+        final[attribute_name]
       end
     end
+  end
 
     def url_with_query_params(url, query_params)
       if not query_params.empty?
