@@ -36,8 +36,65 @@ class JIRA::HasManyProxy
     target_class.all(parent.client, parent.to_sym => parent)
   end
 
+  # Adds more resources to relation.
+  def add(*args)
+    args.each do |argument|
+      build.save(argument)
+    end
+
+    true
+  end
+
+  # Reduces the list of resources according the given criteria hash and returns a
+  # new HasManyProxy relation.
+  def where(criteria = {})
+    selection = @collection.select { |item| recursive_compare(item.attrs, criteria) }
+
+    self.class.new(@parent, @target_class, selection)
+  end
+
+  # Removes all resources of the HasManyProxy relation.
+  def remove_all
+    @collection.each do |resource|
+      resource.delete
+    end
+
+    true
+  end
+
   # Delegate any missing methods to the collection that this proxy wraps
   def method_missing(method_name, *args, &block)
     collection.send(method_name, *args, &block)
   end
+
+  # Determines if the hash matches all criteria specified in another hash.
+  # A criterion can accept multiple values by listing them in an array.
+  #
+  # Examples:
+  #   recursive_compare({:foo => {:bar => 1}, :bla => 2}, {:bla => 2}) # => true
+  #   recursive_compare({:foo => {:bar => 1}, :bla => 2}, {:bla => [1,2]}) # => true
+  #   recursive_compare({:foo => {:bar => 1}, :bla => 2}, {:foo => {:bar => 1}}) # => true
+  #   recursive_compare({:foo => {:bar => 1}, :bla => 2}, {:foo => {:bar => 2}}) # => false
+  #   recursive_compare({:foo => {:bar => 1}, :bla => 2}, {:foo => {:bar => 2}, :bla => 2}) # => true
+  def recursive_compare(hash, criteria)
+    criteria.inject(true) do |parent, criterion|
+      # check if criterion is still a nested hash
+      if criterion[1].instance_of?(Hash)
+        if hash.instance_of?(Hash)
+          parent && recursive_compare(hash[criterion[0]], criterion[1])
+        else
+          # in this case the criteria hash is nested deeper than the origin hash
+          false
+        end
+      else
+        if criterion[1].instance_of?(Array)
+          # if the criterion contains multiple value, check if one of them matches
+          parent && criterion[1].include?(hash[criterion[0]])
+        else
+          parent && hash[criterion[0]] == criterion[1]
+        end
+      end
+    end
+  end
+  private :recursive_compare
 end

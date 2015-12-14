@@ -472,6 +472,7 @@ module JIRA
     def self.maybe_nested_attribute(client, attributes, attribute_name, nested_under = nil)
       return attributes[attribute_name] if nested_under.nil?
 
+      # ensure Array to unify handling
       nested_under = Array[nested_under] unless nested_under.instance_of? Array
 
       final = nested_under.inject(attributes) do |parent, key|
@@ -481,13 +482,13 @@ module JIRA
 
       return nil if final.nil?
 
-      if final.instance_of?(Hash) && final.has_key?('self')
+      # load nested resource if there is a self link
+      if final.has_key?('self')
         parse_json(client.get(final['self']).body)[attribute_name]
       else
         final[attribute_name]
       end
     end
-  end
 
     def url_with_query_params(url, query_params)
       if not query_params.empty?
